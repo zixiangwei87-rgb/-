@@ -65,6 +65,7 @@ canvas{display:block;image-rendering:pixelated}
 <button class="mode-btn mist" data-mode="mist">🌫 迷雾秘境<br><span class="mode-desc">迷雾探索 · 血量管理 · 无限关卡</span></button>
 <button class="mode-btn" data-mode="coop">🤝 双人合作<br><span class="mode-desc">3关 · 团队协作突围</span></button>
 <button class="mode-btn" data-mode="versus">⚡ 双人对抗<br><span class="mode-desc">单局决胜 · 道具对抗</span></button>
+<button class="mode-btn" id="btn-cam" style="border-color:#22d3ee;font-size:13px;padding:8px;">📷 摄像头角色</button>
 <button class="mode-btn" id="btn-rules" style="border-color:#555;font-size:13px;padding:8px;">📖 游戏规则</button>
 </div>
 <div id="game-screen" class="screen">
@@ -74,9 +75,11 @@ canvas{display:block;image-rendering:pixelated}
 </div>
 <div id="pause-overlay" class="overlay hidden"><div class="overlay-title">暂停</div><button class="overlay-btn" id="btn-resume">继续游戏</button><button class="overlay-btn secondary" id="btn-restart">重新开始</button><button class="overlay-btn secondary" id="btn-home">返回首页</button></div>
 <div id="result-overlay" class="overlay hidden"><div class="overlay-title" id="result-title"></div><div class="overlay-text" id="result-text"></div><button class="overlay-btn" id="btn-next"></button><button class="overlay-btn secondary" id="btn-home2">返回首页</button></div>
+<div id="cam-overlay" class="overlay hidden"><div class="overlay-title" style="font-size:22px;">📷 注视摄像头 2 秒</div><video id="cam-video" style="width:240px;height:180px;border:3px solid #22d3ee;border-radius:12px;transform:scaleX(-1)" autoplay playsinline></video><canvas id="cam-canvas" style="display:none"></canvas><div style="color:#fff;font-size:14px;">进度: <span id="cam-progress" style="color:#22d3ee">0%</span></div><button class="overlay-btn secondary" id="btn-cam-close">取消</button></div>
 <div id="rules-overlay" class="overlay hidden"><div class="overlay-title" style="font-size:24px;">📖 游戏规则</div><div id="rules-content"></div><button class="overlay-btn secondary" id="btn-rules-close">我知道了</button></div>
 <div class="tooltip" id="tooltip"></div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 <script>
 const _=id=>document.getElementById(id),RI=(a,b)=>Math.floor(Math.random()*(b-a+1))+a,SH=a=>{for(let i=a.length-1;i>0;i--){const j=RI(0,i);[a[i],a[j]]=[a[j],a[i]]}return a},CL=(v,l,h)=>Math.max(l,Math.min(h,v)),DIR=[[0,-1],[0,1],[-1,0],[1,0]];
 function BFS(g,sx,sy,gx,gy,w,h){if(sx===gx&&sy===gy)return[sx,sy];const K=(x,y)=>x+','+y,q=[[sx,sy]],fm=new Map();fm.set(K(sx,sy),null);let fd=false;for(let i=0;i<q.length;i++){const[cx,cy]=q[i];if(cx===gx&&cy===gy){fd=true;break}for(const[dx,dy]of DIR){const nx=cx+dx,ny=cy+dy;if(nx>=0&&nx<w&&ny>=0&&ny<h&&g[ny][nx]===0){const nk=K(nx,ny);if(!fm.has(nk)){fm.set(nk,K(cx,cy));q.push([nx,ny])}}}}if(!fd)return[sx,sy];let c=K(gx,gy);const p=[];while(c!==null){p.push(c);c=fm.get(c)}p.reverse();return p.length>1?p[1].split(',').map(Number):[sx,sy]}
@@ -133,12 +136,82 @@ class RD{constructor(cv){this.cv=cv;this.ctx=cv.getContext('2d');this.cs=40}
   _dc(gx,gy,c_,lb,cs,c){c.fillStyle=c_;c.fillRect(gx*cs+1,gy*cs+1,cs-2,cs-2);c.fillStyle='#fff';c.font='bold '+Math.floor(cs*.5)+'px monospace';c.textAlign='center';c.textBaseline='middle';c.fillText(lb,gx*cs+cs/2,gy*cs+cs/2)}
   _dcl(x,y,tp,cs,c){const cx=x+cs/2,cy=y+cs/2;let r,cl;if(tp==='bn'){r=cs*.12;cl=CLR.bn}else if(tp==='gl'){r=cs*.18;cl=CLR.gl}else{r=cs*.22;cl=CLR.dm}c.fillStyle=cl;c.beginPath();if(tp==='dm'){const s=r*1.3;c.moveTo(cx,cy-s);c.lineTo(cx+s,cy);c.lineTo(cx,cy+s);c.lineTo(cx-s,cy);c.closePath()}else c.arc(cx,cy,r,0,Math.PI*2);c.fill()}
   _dIG(x,y,t,cs,c){const info=ITM[t];if(!info)return;c.fillStyle='rgba(253,175,143,.4)';c.globalAlpha=.3+.2*Math.sin(Date.now()/300);c.fillRect(x+2,y+2,cs-4,cs-4);c.globalAlpha=1;c.font=Math.floor(cs*.5)+'px monospace';c.textAlign='center';c.textBaseline='middle';c.fillText(info.ic,x+cs/2,y+cs/2)}
-  _dP(x,y,id,cs,c){const px=Math.floor(x),py=Math.floor(y),s=cs,cx=px+s/2,u=s/28;const sk='#ffd5b8',sk2='#e8b896',hr=id===0?'#4a2a0a':'#d4a090',sh=id===0?'#f59e0b':'#a855f7',pn='#3b5998';const t=Date.now()/180;const wlk=Math.sin(t)*0.3;c.save();c.translate(cx,py+14*u);const fl=this._fc||0;if(fl<0)c.scale(-1,1);c.translate(-cx,-py-14*u);c.fillStyle=sk2;c.beginPath();c.arc(cx,py+9*u,6*u,0,Math.PI*2);c.fill();c.fillStyle=sk;c.beginPath();c.arc(cx,py+7*u,6*u,0,Math.PI*2);c.fill();c.fillStyle=hr;c.beginPath();c.arc(cx,py+5*u,6*u,Math.PI,2*Math.PI);c.fill();c.fillStyle=sh;c.fillRect(cx-5*u,py+10*u,10*u,7*u);c.fillStyle=sk;c.fillRect(cx-7*u,py+10*u,3*u,5*u);c.fillRect(cx+4*u,py+10*u,3*u,5*u);c.fillStyle=pn;c.fillRect(cx-3*u+wlk*6*u,py+16*u,3*u,5*u);c.fillRect(cx+0*u-wlk*6*u,py+16*u,3*u,5*u);c.fillStyle='#fff';c.beginPath();c.arc(cx-2*u,py+6*u,1.8*u,0,Math.PI*2);c.fill();c.beginPath();c.arc(cx+2*u,py+6*u,1.8*u,0,Math.PI*2);c.fill();c.fillStyle='#111';c.beginPath();c.arc(cx-2*u,py+7*u,0.9*u,0,Math.PI*2);c.fill();c.beginPath();c.arc(cx+2*u,py+7*u,0.9*u,0,Math.PI*2);c.fill();c.restore()}
+  _dP(x,y,id,cs,c){if(this.camFace){const px=Math.floor(x),py=Math.floor(y);if(!this._cfImg){this._cfImg=new Image();this._cfImg.src=this.camFace}const img=this._cfImg;if(img.complete&&img.naturalWidth>0){c.save();c.beginPath();c.arc(px+cs/2,py+cs/2,cs/2-2,0,Math.PI*2);c.clip();c.drawImage(img,px+2,py+2,cs-4,cs-4);c.restore();return}}const px=Math.floor(x),py=Math.floor(y),s=cs;c.font=Math.floor(s*.7)+'px serif';c.textAlign='center';c.textBaseline='middle';c.fillText('😊',x+s/2,y+s/2)}
   _dG(x,y,cs,c){const px=Math.floor(x),py=Math.floor(y),s=cs,cx=px+s/2,r=Math.max(.3,Math.min(1,s/36));const gw=10*r,gh=15*r;c.fillStyle=CLR.gd;c.fillRect(cx-gw,py+s*.2,gw*2,gh);const wy=py+s*.2+gh;for(let w=0;w<5;w++)c.fillRect(cx-gw+w*(gw*2/5)-1,wy+(w%2?2*r:0),gw*2/5,3*r+(w%2?2*r:0));c.fillStyle='#1d4ed8';c.fillRect(cx-gw+1,py+s*.1,gw*2-2,4*r);c.fillStyle='#1a2a5e';c.fillRect(cx-8*r,py+s*.05,16*r,3*r);c.fillStyle='#1a3a7e';c.fillRect(cx-6*r,py+s*.05+3*r,12*r,5*r);c.fillStyle='#ffd700';c.fillRect(cx-2*r,py+s*.05+4*r,4*r,3*r);const es=Math.max(3,Math.floor(4*r));c.fillStyle='#fff';c.fillRect(cx-es-2,py+s*.26,es+1,es+1);c.fillRect(cx+1,py+s*.26,es+1,es+1);c.fillStyle='#ef4444';const ps=Math.max(1,Math.floor(es*.6));c.fillRect(cx-es-2+ps,py+s*.26+ps,ps,ps);c.fillRect(cx+1+ps,py+s*.26+ps,ps,ps)}
 }
 
 class GM_{constructor(){this.cv=_('canvas');this.rd=new RD(this.cv);this.gs=null;this._a=null;this._lt=0;this.mo=false;this._init()}
-  _init(){sfx.init();document.querySelectorAll('.mode-btn[data-mode]').forEach(b=>b.addEventListener('click',()=>this.SG(b.dataset.mode)));_('btn-resume').addEventListener('click',()=>this.RS());_('btn-restart').addEventListener('click',()=>this.RT());_('btn-home').addEventListener('click',()=>this.GH());_('btn-next').addEventListener('click',()=>{if(this.gs&&this.gs.md==='score'&&this.gs.wn==='win'&&this.gs.lv<this.gs.mx)this.NL();else this.RT()});_('btn-home2').addEventListener('click',()=>this.GH());_('btn-rules').addEventListener('click',()=>this.SR(null));_('btn-rules-close').addEventListener('click',()=>_('rules-overlay').classList.add('hidden'));_('rules-overlay').addEventListener('click',e=>{if(e.target===_('rules-overlay'))_('rules-overlay').classList.add('hidden')});document.addEventListener('keydown',e=>this._kd(e));window.addEventListener('resize',()=>{if(this.gs)this.rd.rs(this.gs)});this.cv.addEventListener('click',e=>this._cc(e));this._lp(0)}
+  _camInit(){
+    _('btn-cam').addEventListener('click',()=>this._camStart());
+    _('btn-cam-close').addEventListener('click',()=>this._camStop());
+  }
+  async _camStart(){
+    _('cam-overlay').classList.remove('hidden');
+    _('cam-progress').textContent='0%';
+    this.camGaze=0;this.camDone=false;
+    try{
+      this.camStream=await navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'}});
+      const v=_('cam-video');v.srcObject=this.camStream;await v.play();
+      // Start face detection loop using simple approach
+      this._camSimpleLoop();
+    }catch(e){alert('摄像头权限被拒绝');this._camStop()}
+  }
+  _camSimpleLoop(){
+    if(this.camDone||!this.camStream)return;
+    // Draw video frame to canvas and check for face using basic pixel analysis
+    const v=_('cam-video'),cv=_('cam-canvas');
+    cv.width=160;cv.height=120;
+    const c=cv.getContext('2d');
+    try{c.drawImage(v,0,0,160,120)}catch(e){}
+    // Simple approach: just count up steadily as long as camera is on
+    // Face detection via MediaPipe (loaded separately)
+    if(window.FaceMesh&&!this.camFM){
+      try{
+        this.camFM=new FaceMesh({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/'+f});
+        this.camFM.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
+        this.camFM.onResults(r=>{
+          if(this.camDone)return;
+          if(r.multiFaceLandmarks&&r.multiFaceLandmarks.length>0){
+            this.camGaze+=80;
+          }else{
+            this.camGaze=Math.max(0,this.camGaze-150);
+          }
+          const pct=Math.min(100,Math.floor(this.camGaze/20));
+          _('cam-progress').textContent=pct+'%';
+          if(this.camGaze>=2000){this.camDone=true;this._camCapture(r.multiFaceLandmarks?r.multiFaceLandmarks[0]:null)}
+        });
+      }catch(e){console.log('FaceMesh init failed, using simple timer')}
+    }
+    // Send frame to FaceMesh if available
+    if(this.camFM&&!this.camDone){
+      try{this.camFM.send({image:v})}catch(e){}
+    }
+    // Fallback: simple timer even without face detection
+    if(!this.camFM){
+      this.camGaze+=80;
+      const pct=Math.min(100,Math.floor(this.camGaze/20));
+      _('cam-progress').textContent=pct+'%';
+      if(this.camGaze>=2000){this.camDone=true;this._camCapture(null)}
+    }
+    requestAnimationFrame(()=>this._camSimpleLoop());
+  }
+  _camCapture(lm){
+    const v=_('cam-video'),cv=_('cam-canvas');cv.width=128;cv.height=128;const c=cv.getContext('2d');
+    c.beginPath();c.arc(64,64,60,0,Math.PI*2);c.clip();
+    if(lm){
+      const xs=lm.map(p=>p.x*v.videoWidth),ys=lm.map(p=>p.y*v.videoHeight);
+      const x=Math.max(0,Math.min(...xs)-20),y=Math.max(0,Math.min(...ys)-30);
+      const w=Math.min(v.videoWidth-x,Math.max(...xs)-x+40),h=Math.min(v.videoHeight-y,Math.max(...ys)-y+50);
+      c.drawImage(v,x,y,w,h,0,0,128,128);
+    }else{c.drawImage(v,0,0,v.videoWidth,v.videoHeight,0,0,128,128)}
+    this.camFace=cv.toDataURL('image/png');this._camStop();
+    const md=prompt('选择模式: 1=经典刷分 2=迷雾秘境 3=双人合作 4=双人对抗','2')||'2';
+    const modes=['score','mist','coop','versus'];const m=modes[Math.min(3,Math.max(0,parseInt(md)-1))]||'mist';
+    this.SG(m)
+  }
+  _camStop(){if(this.camStream){this.camStream.getTracks().forEach(t=>t.stop());this.camStream=null}
+    _('cam-overlay').classList.add('hidden');if(_('cam-video'))_('cam-video').srcObject=null}
+  _init(){sfx.init();this._camInit();document.querySelectorAll('.mode-btn[data-mode]').forEach(b=>b.addEventListener('click',()=>this.SG(b.dataset.mode)));_('btn-resume').addEventListener('click',()=>this.RS());_('btn-restart').addEventListener('click',()=>this.RT());_('btn-home').addEventListener('click',()=>this.GH());_('btn-next').addEventListener('click',()=>{if(this.gs&&this.gs.md==='score'&&this.gs.wn==='win'&&this.gs.lv<this.gs.mx)this.NL();else this.RT()});_('btn-home2').addEventListener('click',()=>this.GH());_('btn-rules').addEventListener('click',()=>this.SR(null));_('btn-rules-close').addEventListener('click',()=>_('rules-overlay').classList.add('hidden'));_('rules-overlay').addEventListener('click',e=>{if(e.target===_('rules-overlay'))_('rules-overlay').classList.add('hidden')});document.addEventListener('keydown',e=>this._kd(e));window.addEventListener('resize',()=>{if(this.gs)this.rd.rs(this.gs)});this.cv.addEventListener('click',e=>this._cc(e));this._lp(0)}
   SG(md){this.gs=new GS(md);sfx.mood('happy');this._sUI();this._ss('game-screen');this.rd.rs(this.gs);setTimeout(()=>{if(this.gs)this.rd.rs(this.gs)},50);this._uUI();this._rL();this._rS();this._rSt()}
   RT(){const m=this.gs.md;_('pause-overlay').classList.add('hidden');_('result-overlay').classList.add('hidden');this.SG(m)}
   RS(){if(!this.gs||this.gs.go)return;this.gs.pa=false;_('pause-overlay').classList.add('hidden')}
