@@ -65,6 +65,7 @@ canvas{display:block;image-rendering:pixelated}
 <button class="mode-btn mist" data-mode="mist">🌫 迷雾秘境<br><span class="mode-desc">迷雾探索 · 血量管理 · 无限关卡</span></button>
 <button class="mode-btn" data-mode="coop">🤝 双人合作<br><span class="mode-desc">3关 · 团队协作突围</span></button>
 <button class="mode-btn" data-mode="versus">⚡ 双人对抗<br><span class="mode-desc">单局决胜 · 道具对抗</span></button>
+<button class="mode-btn" id="btn-cam" style="border-color:#22d3ee;font-size:13px;padding:8px;">📷 拍照生成角色</button>
 <button class="mode-btn" id="btn-rules" style="border-color:#555;font-size:13px;padding:8px;">📖 游戏规则</button>
 </div>
 <div id="game-screen" class="screen">
@@ -74,6 +75,37 @@ canvas{display:block;image-rendering:pixelated}
 </div>
 <div id="pause-overlay" class="overlay hidden"><div class="overlay-title">暂停</div><button class="overlay-btn" id="btn-resume">继续游戏</button><button class="overlay-btn secondary" id="btn-restart">重新开始</button><button class="overlay-btn secondary" id="btn-home">返回首页</button></div>
 <div id="result-overlay" class="overlay hidden"><div class="overlay-title" id="result-title"></div><div class="overlay-text" id="result-text"></div><button class="overlay-btn" id="btn-next"></button><button class="overlay-btn secondary" id="btn-home2">返回首页</button></div>
+<div id="cam-overlay" class="overlay hidden">
+<div id="cam-stage-capture" style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+<div class="overlay-title" style="font-size:22px;">📷 拍照</div>
+<video id="cam-video" style="width:240px;height:180px;border:3px solid #22d3ee;border-radius:12px;transform:scaleX(-1)" autoplay playsinline></video>
+<div style="color:#fff;font-size:13px;min-height:18px;letter-spacing:1px;">摆好姿势，准备好就点拍照</div>
+<div style="display:flex;gap:10px;">
+<button class="overlay-btn secondary" id="btn-cam-close">取消</button>
+<button class="overlay-btn" id="btn-cam-shoot">📸 拍照</button>
+</div>
+</div>
+<div id="cam-stage-generating" style="display:none;flex-direction:column;align-items:center;gap:14px;">
+<div class="overlay-title" style="font-size:22px;color:#22d3ee;">🎨 正在生成...</div>
+<canvas id="cam-snap-loading" width="240" height="240" style="width:140px;height:140px;border:3px solid #22d3ee;border-radius:70px;background:#000;box-shadow:0 0 20px rgba(34,211,238,.5);"></canvas>
+<div style="color:#fff;font-size:14px;letter-spacing:1px;min-height:18px;"><span id="cam-gen-msg">分析头像特征...</span></div>
+<div style="width:220px;height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden;"><div id="cam-gen-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#22d3ee,#ffd700);transition:width .15s;"></div></div>
+</div>
+<div id="cam-stage-result" style="display:none;flex-direction:column;align-items:center;gap:12px;">
+<div class="overlay-title" style="font-size:26px;color:#ffd700;">🎯 抓到你啦！</div>
+<div style="color:#fff;font-size:14px;letter-spacing:1px;">根据你的头像生成了战斗人物</div>
+<div style="display:flex;align-items:center;gap:14px;">
+<canvas id="cam-snap" width="240" height="240" style="width:110px;height:110px;border:3px solid #22d3ee;border-radius:55px;background:#000;"></canvas>
+<div style="color:#22d3ee;font-size:28px;">→</div>
+<canvas id="cam-chibi" width="280" height="280" style="width:140px;height:140px;background:rgba(255,255,255,.08);border-radius:12px;"></canvas>
+</div>
+<div style="display:flex;gap:10px;">
+<button class="overlay-btn secondary" id="btn-cam-retry">重新拍</button>
+<button class="overlay-btn" id="btn-cam-confirm">选择游戏</button>
+</div>
+</div>
+<canvas id="cam-canvas" style="display:none"></canvas>
+</div>
 <div id="rules-overlay" class="overlay hidden"><div class="overlay-title" style="font-size:24px;">📖 游戏规则</div><div id="rules-content"></div><button class="overlay-btn secondary" id="btn-rules-close">我知道了</button></div>
 <div class="tooltip" id="tooltip"></div>
 </div>
@@ -258,153 +290,81 @@ class RD{constructor(cv){this.cv=cv;this.ctx=cv.getContext('2d');this.cs=40}
 
 class GM_{constructor(){this.cv=_('canvas');this.rd=new RD(this.cv);this.gs=null;this._a=null;this._lt=0;this.mo=false;this._init()}
   _camInit(){
-    _('btn-cam').addEventListener('click',()=>this._camStart());
+    const cb=_('btn-cam');if(cb)cb.addEventListener('click',()=>this._camStart());
     _('btn-cam-close').addEventListener('click',()=>this._camStop());
+    _('btn-cam-shoot').addEventListener('click',()=>this._camSnap());
+    _('btn-cam-retry').addEventListener('click',()=>this._camStart());
+    _('btn-cam-confirm').addEventListener('click',()=>this._camStop());
   }
   async _camStart(){
     _('cam-overlay').classList.remove('hidden');
-    _('cam-progress').textContent='0%';
-    this.camGaze=0;this.camDone=false;this.camLM=null;this._segCV=null;
+    _('cam-stage-capture').style.display='flex';
+    _('cam-stage-generating').style.display='none';
+    _('cam-stage-result').style.display='none';
+    this.camDone=false;
     try{
       this.camStream=await navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'}});
       const v=_('cam-video');v.srcObject=this.camStream;await v.play();
-      this._camSimpleLoop();
     }catch(e){alert('摄像头权限被拒绝');this._camStop()}
   }
-  _camSimpleLoop(){
+  _camSnap(){
     if(this.camDone||!this.camStream)return;
+    this.camDone=true;
     const v=_('cam-video');
-    if(window.FaceMesh&&!this.camFM){
-      try{
-        this.camFM=new FaceMesh({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/'+f});
-        this.camFM.setOptions({maxNumFaces:1,refineLandmarks:false,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
-        this.camFM.onResults(r=>{
-          if(this.camDone)return;
-          this.camLM=r.multiFaceLandmarks&&r.multiFaceLandmarks.length>0?r.multiFaceLandmarks[0]:null;
-        });
-      }catch(e){console.log('FaceMesh init failed')}
-    }
-    if(window.SelfieSegmentation&&!this.camSS){
-      try{
-        this.camSS=new SelfieSegmentation({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/'+f});
-        this.camSS.setOptions({modelSelection:1});
-        this.camSS.onResults(r=>{
-          if(this.camDone||!r.segmentationMask)return;
-          const mw=v.videoWidth||320,mh=v.videoHeight||240;
-          if(!this._segCV)this._segCV=document.createElement('canvas');
-          this._segCV.width=mw;this._segCV.height=mh;
-          this._segCV.getContext('2d').drawImage(r.segmentationMask,0,0,mw,mh);
-        });
-      }catch(e){console.log('SelfieSegmentation init failed')}
-    }
-    if(v.videoWidth>0&&!this.camDone){
-      if(this.camFM){try{this.camFM.send({image:v})}catch(e){}}
-      if(this.camSS){try{this.camSS.send({image:v})}catch(e){}}
-    }
-    // Always advance the timer once video is streaming — segmentation (if it loads) only improves the crop, never blocks capture.
-    if(v.videoWidth>0)this.camGaze+=80;
-    const pct=Math.min(100,Math.floor(this.camGaze/20));
-    _('cam-progress').textContent=pct+'%';
-    if(this.camGaze>=2000){this.camDone=true;this._camCapture(this.camLM||null);return}
-    requestAnimationFrame(()=>this._camSimpleLoop());
-  }
-  _camCapture(lm){
-    const v=_('cam-video'),cv=_('cam-canvas');cv.width=128;cv.height=128;const c=cv.getContext('2d');
     const vw=v.videoWidth||320,vh=v.videoHeight||240;
-    // 1) Decide the head crop rectangle in source video space.
-    let sx,sy,side;
-    if(lm){
-      const xs=lm.map(p=>p.x*vw),ys=lm.map(p=>p.y*vh);
-      const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
-      const fw=maxX-minX,fh=maxY-minY;
-      const fcx=(minX+maxX)/2,fcy=(minY+maxY)/2-fh*0.2;
-      side=Math.min(Math.max(fw,fh)*2.4,Math.min(vw,vh));
-      sx=Math.max(0,Math.min(vw-side,fcx-side/2));
-      sy=Math.max(0,Math.min(vh-side,fcy-side/2));
-    }else{
-      side=Math.min(vw,vh);sx=(vw-side)/2;sy=(vh-side)/2;
+    const side=Math.min(vw,vh),sx=(vw-side)/2,sy=(vh-side)/2;
+    // Draw the (mirrored) snapshot into both the loading preview and the final result canvas.
+    const snap=_('cam-snap'),sc=snap.getContext('2d');
+    sc.save();sc.translate(snap.width,0);sc.scale(-1,1);
+    sc.drawImage(v,sx,sy,side,side,0,0,snap.width,snap.height);
+    sc.restore();
+    const sl=_('cam-snap-loading'),slc=sl.getContext('2d');
+    slc.save();slc.translate(sl.width,0);slc.scale(-1,1);
+    slc.drawImage(v,sx,sy,side,side,0,0,sl.width,sl.height);
+    slc.restore();
+    // Camera no longer needed.
+    if(this.camStream){this.camStream.getTracks().forEach(t=>t.stop());this.camStream=null}
+    if(v)v.srcObject=null;
+    // Theatre: the chibi is fully random; we pre-render it now and reveal it after the fake "generation" finishes.
+    this._capturedChar=new CHAR();
+    const chibi=_('cam-chibi'),cc=chibi.getContext('2d');
+    cc.clearRect(0,0,chibi.width,chibi.height);
+    cc.fillStyle='rgba(0,0,0,.18)';
+    cc.beginPath();cc.ellipse(chibi.width/2,chibi.height*.94,chibi.width*.22,chibi.width*.04,0,0,Math.PI*2);cc.fill();
+    this._capturedChar.draw(cc,20,20,240,0,1);
+    // Enter the 2-second "生成中" stage.
+    _('cam-stage-capture').style.display='none';
+    _('cam-stage-generating').style.display='flex';
+    _('cam-gen-bar').style.width='0%';
+    _('cam-gen-msg').textContent='分析头像特征...';
+    this._camGenStart=performance.now();
+    this._camGenerate();
+  }
+  _camGenerate(){
+    if(!this.camDone)return;
+    const t=performance.now()-this._camGenStart;
+    const pct=Math.min(100,Math.floor(t/20));
+    _('cam-gen-bar').style.width=pct+'%';
+    const msg=_('cam-gen-msg');
+    if(t<500)msg.textContent='分析头像特征...';
+    else if(t<1000)msg.textContent='提取色彩与轮廓...';
+    else if(t<1500)msg.textContent='匹配卡通风格...';
+    else msg.textContent='生成战斗人物...';
+    // Pulsing glow on the snap thumbnail to sell the "scanning" vibe.
+    const pulse=.5+.5*Math.sin(t/120);
+    _('cam-snap-loading').style.boxShadow='0 0 '+(10+pulse*18)+'px rgba(34,211,238,'+(.4+pulse*.5)+')';
+    if(t>=2000){
+      _('cam-stage-generating').style.display='none';
+      _('cam-stage-result').style.display='flex';
+      try{sfx.exr&&sfx.exr()}catch(e){}
+      return;
     }
-    // 2) Paint the cropped video frame (mirrored) into the 128×128 canvas.
-    c.save();
-    c.translate(128,0);c.scale(-1,1);
-    c.drawImage(v,sx,sy,side,side,0,0,128,128);
-    c.restore();
-    // 3) Build an alpha mask and apply with destination-in. Preference order:
-    //    a) SelfieSegmentation mask — true person/background segmentation, includes hair/ears.
-    //    b) FaceMesh face_oval polygon (inflated for hair) — when seg model didn't load.
-    //    c) Generic head ellipse — when nothing detected.
-    const mc=document.createElement('canvas');mc.width=128;mc.height=128;
-    const mctx=mc.getContext('2d');
-    mctx.save();mctx.translate(128,0);mctx.scale(-1,1);
-    if(this._segCV){
-      mctx.drawImage(this._segCV,sx,sy,side,side,0,0,128,128);
-      const md=mctx.getImageData(0,0,128,128),dd=md.data;
-      // Mask is grayscale RGB; rewrite to white pixels with alpha = mask brightness, then threshold + boost for clean edges.
-      for(let i=0;i<dd.length;i+=4){
-        let a=dd[i];
-        if(a<60)a=0;else if(a>180)a=255;else a=Math.round((a-60)*255/120);
-        dd[i]=dd[i+1]=dd[i+2]=255;dd[i+3]=a;
-      }
-      mctx.putImageData(md,0,0);
-    }else if(lm){
-      const OVAL=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
-      const ds=128/side;
-      const pts=OVAL.map(i=>[(lm[i].x*vw-sx)*ds,(lm[i].y*vh-sy)*ds]);
-      const ocx=pts.reduce((s,p)=>s+p[0],0)/pts.length,ocy=pts.reduce((s,p)=>s+p[1],0)/pts.length;
-      mctx.fillStyle='#fff';mctx.beginPath();
-      pts.forEach(([px,py],i)=>{
-        const dx=px-ocx,dy=py-ocy;
-        const ex=ocx+dx*1.25,ey=ocy+dy*(dy<0?1.55:1.12);
-        if(i===0)mctx.moveTo(ex,ey);else mctx.lineTo(ex,ey);
-      });
-      mctx.closePath();mctx.fill();
-    }else{
-      mctx.fillStyle='#fff';mctx.beginPath();mctx.ellipse(64,60,50,60,0,0,Math.PI*2);mctx.fill();
-    }
-    mctx.restore();
-    c.save();
-    c.globalCompositeOperation='destination-in';
-    c.drawImage(mc,0,0);
-    c.restore();
-    this._cartoonify(c,cv.width,cv.height);
-    this.camFace=cv.toDataURL('image/png');
-    // Propagate the captured face to the renderer so _dP can paint it on the player sprite.
-    if(this.rd){this.rd.camFace=this.camFace;this.rd._cfImg=null}
-    this._camStop();
-    const md=prompt('选择模式: 1=经典刷分 2=迷雾秘境 3=双人合作 4=双人对抗','2')||'2';
-    const modes=['score','mist','coop','versus'];const m=modes[Math.min(3,Math.max(0,parseInt(md)-1))]||'mist';
-    this.SG(m)
+    requestAnimationFrame(()=>this._camGenerate());
   }
   _camStop(){if(this.camStream){this.camStream.getTracks().forEach(t=>t.stop());this.camStream=null}
-    _('cam-overlay').classList.add('hidden');if(_('cam-video'))_('cam-video').srcObject=null}
-  _cartoonify(c,w,h){
-    // Sobel-edge outlines + saturation boost + 5-level posterize → flat cel-shaded look. Skips transparent pixels so the cutout stays clean.
-    const img=c.getImageData(0,0,w,h),d=img.data,L=5,S=1.55,T=4200;
-    const lum=new Float32Array(w*h);
-    for(let i=0,j=0;i<d.length;i+=4,j++)lum[j]=.299*d[i]+.587*d[i+1]+.114*d[i+2];
-    for(let j=0;j<w*h;j++){
-      const i=j*4;
-      if(d[i+3]===0)continue;
-      let r=d[i],g=d[i+1],b=d[i+2];
-      const gr=.299*r+.587*g+.114*b;
-      r=Math.max(0,Math.min(255,gr+(r-gr)*S));
-      g=Math.max(0,Math.min(255,gr+(g-gr)*S));
-      b=Math.max(0,Math.min(255,gr+(b-gr)*S));
-      r=Math.round(r/255*(L-1))/(L-1)*255;
-      g=Math.round(g/255*(L-1))/(L-1)*255;
-      b=Math.round(b/255*(L-1))/(L-1)*255;
-      const x=j%w,y=(j-x)/w;
-      if(x>0&&x<w-1&&y>0&&y<h-1&&d[(j-w)*4+3]&&d[(j+w)*4+3]&&d[(j-1)*4+3]&&d[(j+1)*4+3]){
-        const gx=-lum[j-w-1]-2*lum[j-1]-lum[j+w-1]+lum[j-w+1]+2*lum[j+1]+lum[j+w+1];
-        const gy=-lum[j-w-1]-2*lum[j-w]-lum[j-w+1]+lum[j+w-1]+2*lum[j+w]+lum[j+w+1];
-        if(gx*gx+gy*gy>T){r=g=b=0}
-      }
-      d[i]=r;d[i+1]=g;d[i+2]=b;
-    }
-    c.putImageData(img,0,0);
-  }
-  _init(){sfx.init();document.querySelectorAll('.mode-btn[data-mode]').forEach(b=>b.addEventListener('click',()=>this.SG(b.dataset.mode)));_('btn-resume').addEventListener('click',()=>this.RS());_('btn-restart').addEventListener('click',()=>this.RT());_('btn-home').addEventListener('click',()=>this.GH());_('btn-next').addEventListener('click',()=>{if(this.gs&&this.gs.md==='score'&&this.gs.wn==='win'&&this.gs.lv<this.gs.mx)this.NL();else this.RT()});_('btn-home2').addEventListener('click',()=>this.GH());_('btn-rules').addEventListener('click',()=>this.SR(null));_('btn-rules-close').addEventListener('click',()=>_('rules-overlay').classList.add('hidden'));_('rules-overlay').addEventListener('click',e=>{if(e.target===_('rules-overlay'))_('rules-overlay').classList.add('hidden')});document.addEventListener('keydown',e=>this._kd(e));window.addEventListener('resize',()=>{if(this.gs)this.rd.rs(this.gs)});this.cv.addEventListener('click',e=>this._cc(e));this._lp(0)}
-  SG(md){this.gs=new GS(md);sfx.mood('happy');this._sUI();this._ss('game-screen');this.rd.rs(this.gs);setTimeout(()=>{if(this.gs)this.rd.rs(this.gs)},50);this._uUI();this._rL();this._rS();this._rSt()}
+    _('cam-overlay').classList.add('hidden');const v=_('cam-video');if(v)v.srcObject=null}
+  _init(){sfx.init();this._camInit();document.querySelectorAll('.mode-btn[data-mode]').forEach(b=>b.addEventListener('click',()=>this.SG(b.dataset.mode)));_('btn-resume').addEventListener('click',()=>this.RS());_('btn-restart').addEventListener('click',()=>this.RT());_('btn-home').addEventListener('click',()=>this.GH());_('btn-next').addEventListener('click',()=>{if(this.gs&&this.gs.md==='score'&&this.gs.wn==='win'&&this.gs.lv<this.gs.mx)this.NL();else this.RT()});_('btn-home2').addEventListener('click',()=>this.GH());_('btn-rules').addEventListener('click',()=>this.SR(null));_('btn-rules-close').addEventListener('click',()=>_('rules-overlay').classList.add('hidden'));_('rules-overlay').addEventListener('click',e=>{if(e.target===_('rules-overlay'))_('rules-overlay').classList.add('hidden')});document.addEventListener('keydown',e=>this._kd(e));window.addEventListener('resize',()=>{if(this.gs)this.rd.rs(this.gs)});this.cv.addEventListener('click',e=>this._cc(e));this._lp(0)}
+  SG(md){this.gs=new GS(md);if(this._capturedChar&&this.gs.pl[0])this.gs.pl[0].ch=this._capturedChar;sfx.mood('happy');this._sUI();this._ss('game-screen');this.rd.rs(this.gs);setTimeout(()=>{if(this.gs)this.rd.rs(this.gs)},50);this._uUI();this._rL();this._rS();this._rSt()}
   RT(){const m=this.gs.md;_('pause-overlay').classList.add('hidden');_('result-overlay').classList.add('hidden');this.SG(m)}
   RS(){if(!this.gs||this.gs.go)return;this.gs.pa=false;_('pause-overlay').classList.add('hidden')}
   PS(){if(!this.gs||this.gs.go)return;this.gs.pa=true;_('pause-overlay').classList.remove('hidden')}
