@@ -65,7 +65,7 @@ canvas{display:block;image-rendering:pixelated}
 <button class="mode-btn mist" data-mode="mist">🌫 迷雾秘境<br><span class="mode-desc">迷雾探索 · 血量管理 · 无限关卡</span></button>
 <button class="mode-btn" data-mode="coop">🤝 双人合作<br><span class="mode-desc">3关 · 团队协作突围</span></button>
 <button class="mode-btn" data-mode="versus">⚡ 双人对抗<br><span class="mode-desc">单局决胜 · 道具对抗</span></button>
-<button class="mode-btn" id="btn-cam" style="border-color:#22d3ee;font-size:13px;padding:8px;">📷 摄像头角色</button>
+<button class="mode-btn" id="btn-cam" style="border-color:#22d3ee;font-size:13px;padding:8px;">📷 拍照生成角色</button>
 <button class="mode-btn" id="btn-rules" style="border-color:#555;font-size:13px;padding:8px;">📖 游戏规则</button>
 </div>
 <div id="game-screen" class="screen">
@@ -75,11 +75,40 @@ canvas{display:block;image-rendering:pixelated}
 </div>
 <div id="pause-overlay" class="overlay hidden"><div class="overlay-title">暂停</div><button class="overlay-btn" id="btn-resume">继续游戏</button><button class="overlay-btn secondary" id="btn-restart">重新开始</button><button class="overlay-btn secondary" id="btn-home">返回首页</button></div>
 <div id="result-overlay" class="overlay hidden"><div class="overlay-title" id="result-title"></div><div class="overlay-text" id="result-text"></div><button class="overlay-btn" id="btn-next"></button><button class="overlay-btn secondary" id="btn-home2">返回首页</button></div>
-<div id="cam-overlay" class="overlay hidden"><div class="overlay-title" style="font-size:22px;">📷 注视摄像头 2 秒</div><video id="cam-video" style="width:240px;height:180px;border:3px solid #22d3ee;border-radius:12px;transform:scaleX(-1)" autoplay playsinline></video><canvas id="cam-canvas" style="display:none"></canvas><div style="color:#fff;font-size:14px;">进度: <span id="cam-progress" style="color:#22d3ee">0%</span></div><button class="overlay-btn secondary" id="btn-cam-close">取消</button></div>
+<div id="cam-overlay" class="overlay hidden">
+<div id="cam-stage-capture" style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+<div class="overlay-title" style="font-size:22px;">📷 拍照</div>
+<video id="cam-video" style="width:240px;height:180px;border:3px solid #22d3ee;border-radius:12px;transform:scaleX(-1)" autoplay playsinline></video>
+<div style="color:#fff;font-size:13px;min-height:18px;letter-spacing:1px;">摆好姿势，准备好就点拍照</div>
+<div style="display:flex;gap:10px;">
+<button class="overlay-btn secondary" id="btn-cam-close">取消</button>
+<button class="overlay-btn" id="btn-cam-shoot">📸 拍照</button>
+</div>
+</div>
+<div id="cam-stage-generating" style="display:none;flex-direction:column;align-items:center;gap:14px;">
+<div class="overlay-title" style="font-size:22px;color:#22d3ee;">🎨 正在生成...</div>
+<canvas id="cam-snap-loading" width="240" height="240" style="width:140px;height:140px;border:3px solid #22d3ee;border-radius:70px;background:#000;box-shadow:0 0 20px rgba(34,211,238,.5);"></canvas>
+<div style="color:#fff;font-size:14px;letter-spacing:1px;min-height:18px;"><span id="cam-gen-msg">分析头像特征...</span></div>
+<div style="width:220px;height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden;"><div id="cam-gen-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#22d3ee,#ffd700);transition:width .15s;"></div></div>
+</div>
+<div id="cam-stage-result" style="display:none;flex-direction:column;align-items:center;gap:12px;">
+<div class="overlay-title" style="font-size:26px;color:#ffd700;">🎯 抓到你啦！</div>
+<div style="color:#fff;font-size:14px;letter-spacing:1px;">根据你的头像生成了战斗人物</div>
+<div style="display:flex;align-items:center;gap:14px;">
+<canvas id="cam-snap" width="240" height="240" style="width:110px;height:110px;border:3px solid #22d3ee;border-radius:55px;background:#000;"></canvas>
+<div style="color:#22d3ee;font-size:28px;">→</div>
+<canvas id="cam-chibi" width="280" height="280" style="width:140px;height:140px;background:rgba(255,255,255,.08);border-radius:12px;"></canvas>
+</div>
+<div style="display:flex;gap:10px;">
+<button class="overlay-btn secondary" id="btn-cam-retry">重新拍</button>
+<button class="overlay-btn" id="btn-cam-confirm">选择游戏</button>
+</div>
+</div>
+<canvas id="cam-canvas" style="display:none"></canvas>
+</div>
 <div id="rules-overlay" class="overlay hidden"><div class="overlay-title" style="font-size:24px;">📖 游戏规则</div><div id="rules-content"></div><button class="overlay-btn secondary" id="btn-rules-close">我知道了</button></div>
 <div class="tooltip" id="tooltip"></div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 <script>
 const _=id=>document.getElementById(id),RI=(a,b)=>Math.floor(Math.random()*(b-a+1))+a,SH=a=>{for(let i=a.length-1;i>0;i--){const j=RI(0,i);[a[i],a[j]]=[a[j],a[i]]}return a},CL=(v,l,h)=>Math.max(l,Math.min(h,v)),DIR=[[0,-1],[0,1],[-1,0],[1,0]];
 function BFS(g,sx,sy,gx,gy,w,h){if(sx===gx&&sy===gy)return[sx,sy];const K=(x,y)=>x+','+y,q=[[sx,sy]],fm=new Map();fm.set(K(sx,sy),null);let fd=false;for(let i=0;i<q.length;i++){const[cx,cy]=q[i];if(cx===gx&&cy===gy){fd=true;break}for(const[dx,dy]of DIR){const nx=cx+dx,ny=cy+dy;if(nx>=0&&nx<w&&ny>=0&&ny<h&&g[ny][nx]===0){const nk=K(nx,ny);if(!fm.has(nk)){fm.set(nk,K(cx,cy));q.push([nx,ny])}}}}if(!fd)return[sx,sy];let c=K(gx,gy);const p=[];while(c!==null){p.push(c);c=fm.get(c)}p.reverse();return p.length>1?p[1].split(',').map(Number):[sx,sy]}
@@ -101,7 +130,113 @@ function SP(cx,cy,n,cl){const p=[];for(let i=0;i<n;i++){const a=Math.random()*Ma
 
 function GM(cfg){const{w,h,wl:tW,gd:nG,ai,bn,gld,dm}=cfg;const g=Array.from({length:h},()=>Array(w).fill(0));const ex=RI(0,Math.floor(w/3)),ey=RI(Math.floor(h*2/3),h-1);const xx=RI(Math.floor(w*2/3),w-1),xy=RI(0,Math.floor(h/3));const cd=[];for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(!(x===ex&&y===ey)&&!(x===xx&&y===xy))cd.push([x,y]);SH(cd);let wp=0;for(const[x,y]of cd){if(wp>=tW)break;g[y][x]=1;if(!RCH(g,ex,ey,xx,xy,w,h))g[y][x]=0;else wp++}const cl=[],em=[];for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(g[y][x]===0)em.push([x,y]);SH(em);let pl=0;for(const[x,y]of em){if((x===ex&&y===ey)||(x===xx&&y===xy))continue;if(pl<dm)cl.push({x,y,tp:'dm'});else if(pl<dm+gld)cl.push({x,y,tp:'gl'});else if(pl<dm+gld+bn)cl.push({x,y,tp:'bn'});else break;pl++}const gi=[];for(const[x,y]of em){if(gi.length>=5)break;if((x===ex&&y===ey)||(x===xx&&y===xy))continue;if(cl.some(c=>c.x===x&&c.y===y))continue;if(Math.abs(x-ex)<3&&Math.abs(y-ey)<3)continue;gi.push({x,y,tp:null})}const gs=[],gc=[...em].filter(([x,y])=>Math.abs(x-ex)+Math.abs(y-ey)>=4).filter(([x,y])=>!cl.some(c=>c.x===x&&c.y===y)).filter(([x,y])=>!gi.some(i=>i.x===x&&i.y===y));SH(gc);for(let i=0;i<Math.min(nG,gc.length);i++)gs.push({x:gc[i][0],y:gc[i][1],ai});return{grid:g,w,h,ex,ey,xx,xy,cl,gs,gi}}
 
-class PL{constructor(id,x,y){this.id=id;this.x=x;this.y=y;this.sc=0;this.cb=0;this.it=[];this.al=true;this.rx=false;this.es=false;this.iv=0;this.db=false;this.fz=false;this.rv=false;this.hp=4;this.mh=4;this.ax=x;this.ay=y;this.ap=1;this.ct=0;this.pc=false;this.fc=0}}
+const CSKN=['#FFE5D2','#F8C8A8','#E0AC7D','#C68E60','#8F5A36','#5C3A23'];
+const CHRC=['#1a1a1a','#3d2817','#6b4423','#a55727','#d4a017','#c08552','#8e44ad','#3498db','#e74c3c','#ec407a','#27ae60','#e6e6e6'];
+const CEY=['#1a1a1a','#3a1f0a','#0d4a1f','#0d2a5a','#5a0d3a','#7a4d0a'];
+const COF=['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#34495e','#e91e63','#ff7043','#26c6da'];
+const CPT=['#374151','#1f2937','#4b5563','#0f172a','#7c2d12','#365314','#1e3a8a'];
+const CSH=['#1f2937','#7c2d12','#581c87','#0f172a'];
+class CHAR{
+  constructor(){
+    const r=Math.random;
+    this.sk=CSKN[Math.floor(r()*CSKN.length)];
+    this.hc=CHRC[Math.floor(r()*CHRC.length)];
+    this.hs=Math.floor(r()*6);
+    this.ey=CEY[Math.floor(r()*CEY.length)];
+    this.of=COF[Math.floor(r()*COF.length)];
+    this.pt=CPT[Math.floor(r()*CPT.length)];
+    this.sh=CSH[Math.floor(r()*CSH.length)];
+    this.ac=r()>0.7?Math.floor(r()*3):-1;
+  }
+  draw(c,x,y,cs,frame,facing){
+    const f=frame&3;
+    const lo=f===1?-cs*.045:f===3?cs*.025:0;
+    const ro=f===1?cs*.025:f===3?-cs*.045:0;
+    const am=f===1?cs*.07:f===3?-cs*.07:0;
+    const bb=(f===1||f===3)?-cs*.015:0;
+    c.save();
+    if(facing<0){c.translate(x+cs,y);c.scale(-1,1)}else c.translate(x,y);
+    const cx=cs/2,STR='#1a1a1a';
+    c.strokeStyle=STR;c.lineWidth=Math.max(1,cs*.025);c.lineJoin='round';
+    // Legs
+    const ly=cs*.72+bb,lh=cs*.16,lw=cs*.075;
+    c.fillStyle=this.pt;
+    c.beginPath();c.rect(cx-cs*.11,ly+lo,lw,lh-Math.abs(lo));c.fill();c.stroke();
+    c.beginPath();c.rect(cx+cs*.035,ly+ro,lw,lh-Math.abs(ro));c.fill();c.stroke();
+    c.fillStyle=this.sh;
+    c.beginPath();c.ellipse(cx-cs*.075,ly+lh+lo-Math.abs(lo),cs*.07,cs*.032,0,0,Math.PI*2);c.fill();c.stroke();
+    c.beginPath();c.ellipse(cx+cs*.075,ly+lh+ro-Math.abs(ro),cs*.07,cs*.032,0,0,Math.PI*2);c.fill();c.stroke();
+    // Torso (rounded rect)
+    const by=cs*.46+bb,bh=cs*.26,bw=cs*.30,br=cs*.05;
+    c.fillStyle=this.of;
+    c.beginPath();
+    c.moveTo(cx-bw/2+br,by);c.lineTo(cx+bw/2-br,by);
+    c.quadraticCurveTo(cx+bw/2,by,cx+bw/2,by+br);c.lineTo(cx+bw/2,by+bh-br);
+    c.quadraticCurveTo(cx+bw/2,by+bh,cx+bw/2-br,by+bh);c.lineTo(cx-bw/2+br,by+bh);
+    c.quadraticCurveTo(cx-bw/2,by+bh,cx-bw/2,by+bh-br);c.lineTo(cx-bw/2,by+br);
+    c.quadraticCurveTo(cx-bw/2,by,cx-bw/2+br,by);c.closePath();c.fill();c.stroke();
+    // Arms
+    c.beginPath();c.ellipse(cx-bw*.65,by+cs*.13-am,cs*.05,cs*.11,0,0,Math.PI*2);c.fill();c.stroke();
+    c.beginPath();c.ellipse(cx+bw*.65,by+cs*.13+am,cs*.05,cs*.11,0,0,Math.PI*2);c.fill();c.stroke();
+    c.fillStyle=this.sk;
+    c.beginPath();c.arc(cx-bw*.65,by+cs*.23-am,cs*.045,0,Math.PI*2);c.fill();c.stroke();
+    c.beginPath();c.arc(cx+bw*.65,by+cs*.23+am,cs*.045,0,Math.PI*2);c.fill();c.stroke();
+    // Head (skin)
+    const hy=cs*.26+bb,hr=cs*.22;
+    c.fillStyle=this.sk;
+    c.beginPath();c.ellipse(cx,hy,hr,hr*1.05,0,0,Math.PI*2);c.fill();c.stroke();
+    // Hair
+    c.fillStyle=this.hc;
+    this._hair(c,cx,hy,hr);
+    // Eyes (whites → iris → shine → lash)
+    const er=cs*.035,el=cx-cs*.08,erR=cx+cs*.08,ye=hy+cs*.025;
+    c.fillStyle='#fff';
+    c.beginPath();c.ellipse(el,ye,er*1.2,er*1.5,0,0,Math.PI*2);c.fill();
+    c.beginPath();c.ellipse(erR,ye,er*1.2,er*1.5,0,0,Math.PI*2);c.fill();
+    c.fillStyle=this.ey;
+    c.beginPath();c.ellipse(el,ye+er*.15,er*.85,er*1.1,0,0,Math.PI*2);c.fill();
+    c.beginPath();c.ellipse(erR,ye+er*.15,er*.85,er*1.1,0,0,Math.PI*2);c.fill();
+    c.fillStyle='#fff';
+    c.beginPath();c.arc(el+er*.3,ye-er*.1,er*.3,0,Math.PI*2);c.fill();
+    c.beginPath();c.arc(erR+er*.3,ye-er*.1,er*.3,0,Math.PI*2);c.fill();
+    c.strokeStyle=STR;c.lineWidth=Math.max(.5,cs*.018);
+    c.beginPath();c.moveTo(el-er*1.1,ye-er*.6);c.quadraticCurveTo(el,ye-er*1.4,el+er*1.1,ye-er*.6);c.stroke();
+    c.beginPath();c.moveTo(erR-er*1.1,ye-er*.6);c.quadraticCurveTo(erR,ye-er*1.4,erR+er*1.1,ye-er*.6);c.stroke();
+    // Blush
+    c.fillStyle='rgba(255,140,160,.55)';
+    c.beginPath();c.ellipse(cx-cs*.13,hy+cs*.08,cs*.038,cs*.025,0,0,Math.PI*2);c.fill();
+    c.beginPath();c.ellipse(cx+cs*.13,hy+cs*.08,cs*.038,cs*.025,0,0,Math.PI*2);c.fill();
+    // Mouth
+    c.strokeStyle=STR;c.lineWidth=Math.max(1,cs*.022);
+    c.beginPath();c.moveTo(cx-cs*.025,hy+cs*.12);c.quadraticCurveTo(cx,hy+cs*.16,cx+cs*.025,hy+cs*.12);c.stroke();
+    // Accessory
+    if(this.ac===0){
+      c.strokeStyle=STR;c.lineWidth=Math.max(1,cs*.025);
+      c.beginPath();c.arc(el,ye+er*.1,er*1.5,0,Math.PI*2);c.stroke();
+      c.beginPath();c.arc(erR,ye+er*.1,er*1.5,0,Math.PI*2);c.stroke();
+      c.beginPath();c.moveTo(el+er*1.5,ye+er*.1);c.lineTo(erR-er*1.5,ye+er*.1);c.stroke();
+    }else if(this.ac===1){
+      c.fillStyle=this.of;
+      c.beginPath();c.moveTo(cx-hr,hy-hr*.9);c.lineTo(cx+hr,hy-hr*.9);c.lineTo(cx+hr*.85,hy-hr*1.5);c.lineTo(cx-hr*.85,hy-hr*1.5);c.closePath();c.fill();c.stroke();
+      c.beginPath();c.ellipse(cx,hy-hr*.9,hr*1.2,hr*.15,0,0,Math.PI*2);c.fill();c.stroke();
+    }else if(this.ac===2){
+      c.fillStyle='rgba(120,70,40,.6)';
+      for(let i=0;i<5;i++){const fx=cx+(i%2===0?-1:1)*(cs*.08+i*cs*.01),fy=hy+cs*.05+(i%2)*cs*.015;c.beginPath();c.arc(fx,fy,cs*.012,0,Math.PI*2);c.fill()}
+    }
+    c.restore();
+  }
+  _hair(c,cx,hy,hr){
+    const top=()=>{c.beginPath();c.arc(cx,hy,hr*1.08,Math.PI,0);c.lineTo(cx+hr*.95,hy+hr*.2);c.lineTo(cx-hr*.95,hy+hr*.2);c.closePath();c.fill();c.stroke()};
+    const hs=this.hs;
+    if(hs===0){top();c.beginPath();c.moveTo(cx-hr*.7,hy-hr*.4);c.quadraticCurveTo(cx-hr*.5,hy+hr*.15,cx-hr*.2,hy-hr*.1);c.quadraticCurveTo(cx,hy+hr*.2,cx+hr*.3,hy-hr*.2);c.quadraticCurveTo(cx+hr*.6,hy+hr*.1,cx+hr*.7,hy-hr*.4);c.closePath();c.fill();c.stroke()}
+    else if(hs===1){c.beginPath();c.moveTo(cx-hr*1.1,hy*.95);for(let i=0;i<7;i++){const sx=cx-hr+hr*i/3,sy=hy-hr-hr*.4+(i%2)*hr*.45;c.lineTo(sx,sy);c.lineTo(sx+hr/6,hy-hr*.5)}c.lineTo(cx+hr*1.1,hy*.95);c.closePath();c.fill();c.stroke()}
+    else if(hs===2){c.beginPath();c.arc(cx,hy,hr*1.1,Math.PI,0);c.lineTo(cx+hr*1.1,hy+hr*1.5);c.quadraticCurveTo(cx,hy+hr*1.6,cx-hr*1.1,hy+hr*1.5);c.closePath();c.fill();c.stroke();c.beginPath();c.moveTo(cx-hr*.8,hy-hr*.4);c.quadraticCurveTo(cx,hy+hr*.1,cx+hr*.8,hy-hr*.4);c.quadraticCurveTo(cx+hr*.5,hy-hr*.5,cx,hy-hr*.7);c.quadraticCurveTo(cx-hr*.5,hy-hr*.5,cx-hr*.8,hy-hr*.4);c.closePath();c.fill();c.stroke()}
+    else if(hs===3){top();c.beginPath();c.arc(cx,hy-hr*1.15,hr*.4,0,Math.PI*2);c.fill();c.stroke();c.beginPath();c.moveTo(cx-hr*.7,hy-hr*.5);c.quadraticCurveTo(cx,hy+hr*.1,cx+hr*.7,hy-hr*.5);c.closePath();c.fill();c.stroke()}
+    else if(hs===4){c.beginPath();c.ellipse(cx+hr*1.0,hy+hr*.4,hr*.3,hr*.7,.4,0,Math.PI*2);c.fill();c.stroke();top();c.beginPath();c.moveTo(cx-hr*.8,hy-hr*.3);c.quadraticCurveTo(cx-hr*.2,hy+hr*.1,cx+hr*.6,hy-hr*.3);c.quadraticCurveTo(cx+hr*.4,hy-hr*.55,cx-hr*.5,hy-hr*.6);c.closePath();c.fill();c.stroke()}
+    else{c.beginPath();c.ellipse(cx-hr*1.15,hy+hr*.4,hr*.32,hr*.5,-.3,0,Math.PI*2);c.fill();c.stroke();c.beginPath();c.ellipse(cx+hr*1.15,hy+hr*.4,hr*.32,hr*.5,.3,0,Math.PI*2);c.fill();c.stroke();top();c.beginPath();c.moveTo(cx-hr*.7,hy-hr*.4);c.quadraticCurveTo(cx-hr*.4,hy+hr*.05,cx,hy-hr*.2);c.quadraticCurveTo(cx+hr*.4,hy+hr*.05,cx+hr*.7,hy-hr*.4);c.closePath();c.fill();c.stroke()}
+  }
+}
+class PL{constructor(id,x,y){this.id=id;this.x=x;this.y=y;this.sc=0;this.cb=0;this.it=[];this.al=true;this.rx=false;this.es=false;this.iv=0;this.db=false;this.fz=false;this.rv=false;this.hp=4;this.mh=4;this.ax=x;this.ay=y;this.ap=1;this.ct=0;this.pc=false;this.fc=0;this.ch=new CHAR();this.an=0;this.ph=0}}
 class GD{constructor(x,y,ai){this.x=x;this.y=y;this.ai=ai;this.ax=x;this.ay=y;this.ap=1}}
 
 class GS{constructor(md){this.md=md;this.lv=1;this.mx=CFG[md].max;const lv=this.GLC();const mp=GM(lv);this.mp=mp;this.gs=mp.gs.map(g=>new GD(g.x,g.y,g.ai));this.gf=0;this.pl=[];if(md==='score'||md==='mist'){this.pl.push(new PL(0,mp.ex,mp.ey))}else{this.pl.push(new PL(0,mp.ex,mp.ey));const p2x=CL(mp.ex+1,0,mp.w-1);this.pl.push(new PL(1,mp.grid[mp.ey][p2x]===0?p2x:mp.ex,mp.ey))}this.ct=0;this.go=false;this.wn=null;this.pa=false;this.af=0;this.pa_=[];this.ca=null;this.mt=null;this.mtT=0;this.pt=[];this.leT=80;this.ceT=0;this.stL=(lv.st||50);this.stX=0;this.fs=[];this.sh=0;this.tr=[];this.dc=[];this.ac=this._la();this.na=[];if(md==='mist'){this.fg=Array.from({length:mp.h},()=>Array(mp.w).fill(0));this.vr=1;this.vb=0;this.vs=0;this.fr=0;this.mi=this._gmi(mp)}this.gi=mp.gi.map(gi=>({...gi,tp:this._rit()}));this.rt=RI(120,300)}
@@ -128,7 +263,7 @@ class RD{constructor(cv){this.cv=cv;this.ctx=cv.getContext('2d');this.cs=40}
     for(const d of gs.dc){c.fillStyle='rgba(0,0,0,.3)';c.fillRect(d.x*cs+2,d.y*cs+2,cs-4,cs-4);c.fillStyle='#fff';c.font=Math.floor(cs*.4)+'px monospace';c.textAlign='center';c.textBaseline='middle';c.fillText('🎭',d.x*cs+cs/2,d.y*cs+cs/2)}
     for(const t of gs.tr){c.globalAlpha=(t.l/12)*.4;c.fillStyle=t.c;c.fillRect(t.x*cs+cs*.35,t.y*cs+cs*.35,cs*.3,cs*.3);c.globalAlpha=1}
     const fa=gs.gf>0?.5:1;for(const g of gs.gs){c.globalAlpha=fa;const gx=g.ap<1?g.ax*cs+(g.x-g.ax)*cs*g.ap:g.x*cs;const gy=g.ap<1?g.ay*cs+(g.y-g.ay)*cs*g.ap:g.y*cs;this._dG(gx,gy,cs,c);c.globalAlpha=1}
-    for(const p of gs.pl){if(!p.al)continue;const px=p.ap<1?p.ax*cs+(p.x-p.ax)*cs*p.ap:p.x*cs;const py=p.ap<1?p.ay*cs+(p.y-p.ay)*cs*p.ap:p.y*cs;c.save();if(p.iv>0||gs.ca)c.globalAlpha=.5+.5*Math.sin(Date.now()/50);this._fc=p.fc;this._dP(px,py,p.id,cs,c);if(p.rx){c.fillStyle='#fff';c.font=Math.floor(cs*.5)+'px monospace';c.textAlign='center';c.fillText('V',px+cs/2,py-4)}c.restore()}
+    for(const p of gs.pl){if(!p.al)continue;const px=p.ap<1?p.ax*cs+(p.x-p.ax)*cs*p.ap:p.x*cs;const py=p.ap<1?p.ay*cs+(p.y-p.ay)*cs*p.ap:p.y*cs;c.save();if(p.iv>0||gs.ca)c.globalAlpha=.5+.5*Math.sin(Date.now()/50);this._dP(px,py,p,cs,c,gs.af);if(p.rx){c.fillStyle='#fff';c.font=Math.floor(cs*.5)+'px monospace';c.textAlign='center';c.fillText('V',px+cs/2,py-4)}c.restore()}
     for(const fs of gs.fs){c.globalAlpha=Math.min(1,fs.l/20);c.fillStyle=fs.c;c.font='bold '+Math.floor(cs*.35)+'px monospace';c.textAlign='center';c.fillText(fs.t,fs.x*cs+cs/2,fs.y*cs);c.globalAlpha=1}
     for(const pt of gs.pt){c.globalAlpha=pt.al;c.fillStyle=pt.c;c.fillRect(Math.floor(pt.x),Math.floor(pt.y),pt.s,pt.s);c.globalAlpha=1}
     if(gs.ca){c.fillStyle='rgba(255,0,0,'+gs.ca+')';c.fillRect(0,0,W,H)}
@@ -136,83 +271,100 @@ class RD{constructor(cv){this.cv=cv;this.ctx=cv.getContext('2d');this.cs=40}
   _dc(gx,gy,c_,lb,cs,c){c.fillStyle=c_;c.fillRect(gx*cs+1,gy*cs+1,cs-2,cs-2);c.fillStyle='#fff';c.font='bold '+Math.floor(cs*.5)+'px monospace';c.textAlign='center';c.textBaseline='middle';c.fillText(lb,gx*cs+cs/2,gy*cs+cs/2)}
   _dcl(x,y,tp,cs,c){const cx=x+cs/2,cy=y+cs/2;let r,cl;if(tp==='bn'){r=cs*.12;cl=CLR.bn}else if(tp==='gl'){r=cs*.18;cl=CLR.gl}else{r=cs*.22;cl=CLR.dm}c.fillStyle=cl;c.beginPath();if(tp==='dm'){const s=r*1.3;c.moveTo(cx,cy-s);c.lineTo(cx+s,cy);c.lineTo(cx,cy+s);c.lineTo(cx-s,cy);c.closePath()}else c.arc(cx,cy,r,0,Math.PI*2);c.fill()}
   _dIG(x,y,t,cs,c){const info=ITM[t];if(!info)return;c.fillStyle='rgba(253,175,143,.4)';c.globalAlpha=.3+.2*Math.sin(Date.now()/300);c.fillRect(x+2,y+2,cs-4,cs-4);c.globalAlpha=1;c.font=Math.floor(cs*.5)+'px monospace';c.textAlign='center';c.textBaseline='middle';c.fillText(info.ic,x+cs/2,y+cs/2)}
-  _dP(x,y,id,cs,c){if(this.camFace){const px=Math.floor(x),py=Math.floor(y);if(!this._cfImg){this._cfImg=new Image();this._cfImg.src=this.camFace}const img=this._cfImg;if(img.complete&&img.naturalWidth>0){c.save();c.beginPath();c.arc(px+cs/2,py+cs/2,cs/2-2,0,Math.PI*2);c.clip();c.drawImage(img,px+2,py+2,cs-4,cs-4);c.restore();return}}const px=Math.floor(x),py=Math.floor(y),s=cs;c.font=Math.floor(s*.7)+'px serif';c.textAlign='center';c.textBaseline='middle';c.fillText('😊',x+s/2,y+s/2)}
+  _dP(x,y,p,cs,c,af){
+    if(p.ch){
+      // Walking phase advances only while interpolating to a new cell; idle snaps to frame 0 with a tiny breathing bob.
+      if(p.ap<1)p.ph=(p.ph+0.25)%4;else p.ph=0;
+      const frame=Math.floor(p.ph);
+      const facing=p.fc<0?-1:1;
+      const bob=p.ap>=1?Math.sin(af/24+p.id*1.7)*cs*.012:0;
+      p.ch.draw(c,x,y+bob,cs,frame,facing);
+      return;
+    }
+    const px=Math.floor(x),py=Math.floor(y),s=cs;
+    c.font=Math.floor(s*.7)+'px serif';c.textAlign='center';c.textBaseline='middle';
+    c.fillText('😊',x+s/2,y+s/2);
+  }
   _dG(x,y,cs,c){const px=Math.floor(x),py=Math.floor(y),s=cs,cx=px+s/2,r=Math.max(.3,Math.min(1,s/36));const gw=10*r,gh=15*r;c.fillStyle=CLR.gd;c.fillRect(cx-gw,py+s*.2,gw*2,gh);const wy=py+s*.2+gh;for(let w=0;w<5;w++)c.fillRect(cx-gw+w*(gw*2/5)-1,wy+(w%2?2*r:0),gw*2/5,3*r+(w%2?2*r:0));c.fillStyle='#1d4ed8';c.fillRect(cx-gw+1,py+s*.1,gw*2-2,4*r);c.fillStyle='#1a2a5e';c.fillRect(cx-8*r,py+s*.05,16*r,3*r);c.fillStyle='#1a3a7e';c.fillRect(cx-6*r,py+s*.05+3*r,12*r,5*r);c.fillStyle='#ffd700';c.fillRect(cx-2*r,py+s*.05+4*r,4*r,3*r);const es=Math.max(3,Math.floor(4*r));c.fillStyle='#fff';c.fillRect(cx-es-2,py+s*.26,es+1,es+1);c.fillRect(cx+1,py+s*.26,es+1,es+1);c.fillStyle='#ef4444';const ps=Math.max(1,Math.floor(es*.6));c.fillRect(cx-es-2+ps,py+s*.26+ps,ps,ps);c.fillRect(cx+1+ps,py+s*.26+ps,ps,ps)}
 }
 
 class GM_{constructor(){this.cv=_('canvas');this.rd=new RD(this.cv);this.gs=null;this._a=null;this._lt=0;this.mo=false;this._init()}
   _camInit(){
-    _('btn-cam').addEventListener('click',()=>this._camStart());
+    const cb=_('btn-cam');if(cb)cb.addEventListener('click',()=>this._camStart());
     _('btn-cam-close').addEventListener('click',()=>this._camStop());
+    _('btn-cam-shoot').addEventListener('click',()=>this._camSnap());
+    _('btn-cam-retry').addEventListener('click',()=>this._camStart());
+    _('btn-cam-confirm').addEventListener('click',()=>this._camStop());
   }
   async _camStart(){
     _('cam-overlay').classList.remove('hidden');
-    _('cam-progress').textContent='0%';
-    this.camGaze=0;this.camDone=false;
+    _('cam-stage-capture').style.display='flex';
+    _('cam-stage-generating').style.display='none';
+    _('cam-stage-result').style.display='none';
+    this.camDone=false;
     try{
       this.camStream=await navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'}});
       const v=_('cam-video');v.srcObject=this.camStream;await v.play();
-      // Start face detection loop using simple approach
-      this._camSimpleLoop();
     }catch(e){alert('摄像头权限被拒绝');this._camStop()}
   }
-  _camSimpleLoop(){
+  _camSnap(){
     if(this.camDone||!this.camStream)return;
-    // Draw video frame to canvas and check for face using basic pixel analysis
-    const v=_('cam-video'),cv=_('cam-canvas');
-    cv.width=160;cv.height=120;
-    const c=cv.getContext('2d');
-    try{c.drawImage(v,0,0,160,120)}catch(e){}
-    // Simple approach: just count up steadily as long as camera is on
-    // Face detection via MediaPipe (loaded separately)
-    if(window.FaceMesh&&!this.camFM){
-      try{
-        this.camFM=new FaceMesh({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/'+f});
-        this.camFM.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
-        this.camFM.onResults(r=>{
-          if(this.camDone)return;
-          if(r.multiFaceLandmarks&&r.multiFaceLandmarks.length>0){
-            this.camGaze+=80;
-          }else{
-            this.camGaze=Math.max(0,this.camGaze-150);
-          }
-          const pct=Math.min(100,Math.floor(this.camGaze/20));
-          _('cam-progress').textContent=pct+'%';
-          if(this.camGaze>=2000){this.camDone=true;this._camCapture(r.multiFaceLandmarks?r.multiFaceLandmarks[0]:null)}
-        });
-      }catch(e){console.log('FaceMesh init failed, using simple timer')}
-    }
-    // Send frame to FaceMesh if available
-    if(this.camFM&&!this.camDone){
-      try{this.camFM.send({image:v})}catch(e){}
-    }
-    // Fallback: simple timer even without face detection
-    if(!this.camFM){
-      this.camGaze+=80;
-      const pct=Math.min(100,Math.floor(this.camGaze/20));
-      _('cam-progress').textContent=pct+'%';
-      if(this.camGaze>=2000){this.camDone=true;this._camCapture(null)}
-    }
-    requestAnimationFrame(()=>this._camSimpleLoop());
+    this.camDone=true;
+    const v=_('cam-video');
+    const vw=v.videoWidth||320,vh=v.videoHeight||240;
+    const side=Math.min(vw,vh),sx=(vw-side)/2,sy=(vh-side)/2;
+    // Draw the (mirrored) snapshot into both the loading preview and the final result canvas.
+    const snap=_('cam-snap'),sc=snap.getContext('2d');
+    sc.save();sc.translate(snap.width,0);sc.scale(-1,1);
+    sc.drawImage(v,sx,sy,side,side,0,0,snap.width,snap.height);
+    sc.restore();
+    const sl=_('cam-snap-loading'),slc=sl.getContext('2d');
+    slc.save();slc.translate(sl.width,0);slc.scale(-1,1);
+    slc.drawImage(v,sx,sy,side,side,0,0,sl.width,sl.height);
+    slc.restore();
+    // Camera no longer needed.
+    if(this.camStream){this.camStream.getTracks().forEach(t=>t.stop());this.camStream=null}
+    if(v)v.srcObject=null;
+    // Theatre: the chibi is fully random; we pre-render it now and reveal it after the fake "generation" finishes.
+    this._capturedChar=new CHAR();
+    const chibi=_('cam-chibi'),cc=chibi.getContext('2d');
+    cc.clearRect(0,0,chibi.width,chibi.height);
+    cc.fillStyle='rgba(0,0,0,.18)';
+    cc.beginPath();cc.ellipse(chibi.width/2,chibi.height*.94,chibi.width*.22,chibi.width*.04,0,0,Math.PI*2);cc.fill();
+    this._capturedChar.draw(cc,20,20,240,0,1);
+    // Enter the 2-second "生成中" stage.
+    _('cam-stage-capture').style.display='none';
+    _('cam-stage-generating').style.display='flex';
+    _('cam-gen-bar').style.width='0%';
+    _('cam-gen-msg').textContent='分析头像特征...';
+    this._camGenStart=performance.now();
+    this._camGenerate();
   }
-  _camCapture(lm){
-    const v=_('cam-video'),cv=_('cam-canvas');cv.width=128;cv.height=128;const c=cv.getContext('2d');
-    c.beginPath();c.arc(64,64,60,0,Math.PI*2);c.clip();
-    if(lm){
-      const xs=lm.map(p=>p.x*v.videoWidth),ys=lm.map(p=>p.y*v.videoHeight);
-      const x=Math.max(0,Math.min(...xs)-20),y=Math.max(0,Math.min(...ys)-30);
-      const w=Math.min(v.videoWidth-x,Math.max(...xs)-x+40),h=Math.min(v.videoHeight-y,Math.max(...ys)-y+50);
-      c.drawImage(v,x,y,w,h,0,0,128,128);
-    }else{c.drawImage(v,0,0,v.videoWidth,v.videoHeight,0,0,128,128)}
-    this.camFace=cv.toDataURL('image/png');this._camStop();
-    const md=prompt('选择模式: 1=经典刷分 2=迷雾秘境 3=双人合作 4=双人对抗','2')||'2';
-    const modes=['score','mist','coop','versus'];const m=modes[Math.min(3,Math.max(0,parseInt(md)-1))]||'mist';
-    this.SG(m)
+  _camGenerate(){
+    if(!this.camDone)return;
+    const t=performance.now()-this._camGenStart;
+    const pct=Math.min(100,Math.floor(t/20));
+    _('cam-gen-bar').style.width=pct+'%';
+    const msg=_('cam-gen-msg');
+    if(t<500)msg.textContent='分析头像特征...';
+    else if(t<1000)msg.textContent='提取色彩与轮廓...';
+    else if(t<1500)msg.textContent='匹配卡通风格...';
+    else msg.textContent='生成战斗人物...';
+    // Pulsing glow on the snap thumbnail to sell the "scanning" vibe.
+    const pulse=.5+.5*Math.sin(t/120);
+    _('cam-snap-loading').style.boxShadow='0 0 '+(10+pulse*18)+'px rgba(34,211,238,'+(.4+pulse*.5)+')';
+    if(t>=2000){
+      _('cam-stage-generating').style.display='none';
+      _('cam-stage-result').style.display='flex';
+      try{sfx.exr&&sfx.exr()}catch(e){}
+      return;
+    }
+    requestAnimationFrame(()=>this._camGenerate());
   }
   _camStop(){if(this.camStream){this.camStream.getTracks().forEach(t=>t.stop());this.camStream=null}
-    _('cam-overlay').classList.add('hidden');if(_('cam-video'))_('cam-video').srcObject=null}
+    _('cam-overlay').classList.add('hidden');const v=_('cam-video');if(v)v.srcObject=null}
   _init(){sfx.init();this._camInit();document.querySelectorAll('.mode-btn[data-mode]').forEach(b=>b.addEventListener('click',()=>this.SG(b.dataset.mode)));_('btn-resume').addEventListener('click',()=>this.RS());_('btn-restart').addEventListener('click',()=>this.RT());_('btn-home').addEventListener('click',()=>this.GH());_('btn-next').addEventListener('click',()=>{if(this.gs&&this.gs.md==='score'&&this.gs.wn==='win'&&this.gs.lv<this.gs.mx)this.NL();else this.RT()});_('btn-home2').addEventListener('click',()=>this.GH());_('btn-rules').addEventListener('click',()=>this.SR(null));_('btn-rules-close').addEventListener('click',()=>_('rules-overlay').classList.add('hidden'));_('rules-overlay').addEventListener('click',e=>{if(e.target===_('rules-overlay'))_('rules-overlay').classList.add('hidden')});document.addEventListener('keydown',e=>this._kd(e));window.addEventListener('resize',()=>{if(this.gs)this.rd.rs(this.gs)});this.cv.addEventListener('click',e=>this._cc(e));this._lp(0)}
-  SG(md){this.gs=new GS(md);sfx.mood('happy');this._sUI();this._ss('game-screen');this.rd.rs(this.gs);setTimeout(()=>{if(this.gs)this.rd.rs(this.gs)},50);this._uUI();this._rL();this._rS();this._rSt()}
+  SG(md){this.gs=new GS(md);if(this._capturedChar&&this.gs.pl[0])this.gs.pl[0].ch=this._capturedChar;sfx.mood('happy');this._sUI();this._ss('game-screen');this.rd.rs(this.gs);setTimeout(()=>{if(this.gs)this.rd.rs(this.gs)},50);this._uUI();this._rL();this._rS();this._rSt()}
   RT(){const m=this.gs.md;_('pause-overlay').classList.add('hidden');_('result-overlay').classList.add('hidden');this.SG(m)}
   RS(){if(!this.gs||this.gs.go)return;this.gs.pa=false;_('pause-overlay').classList.add('hidden')}
   PS(){if(!this.gs||this.gs.go)return;this.gs.pa=true;_('pause-overlay').classList.remove('hidden')}
